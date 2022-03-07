@@ -1,0 +1,61 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: multi-step-task
+spec:
+  params:
+  - name: app-name
+    type: string
+    description: The application name
+  stepTemplate:
+    volumeMounts:
+    - name: varlibc
+      mountPath: /var/lib/containers
+  steps:
+  - name: build-image
+    image: quay.io/buildah/stable:latest
+    securityContext:
+      runAsUser: 1000
+    imagePullPolicy: IfNotPresent
+    script: |
+      #!/bin/bash
+      export BUILDAH_ISOLATION=chroot
+      DESTINATION_IMAGE="image-registry.openshift-image-registry.svc:5000/$(context.taskRun.namespace)/$(params.app-name):latest"
+      BUILDAH_ARGS="--storage-driver vfs"
+      CONTAINER=$( buildah ${BUILDAH_ARGS} from registry.access.redhat.com/ubi8/ubi-minimal:8.5 )
+      cat << EOF > ./test.sh
+      #!/bin/bash
+      echo "---- hello there! ----"
+      sleep 5
+      echo "---- goodbye for now. ----"
+      exit 0
+      EOF
+      chmod 750 ./test.sh
+      buildah ${BUILDAH_ARGS} copy ${CONTAINER} ./test.sh /application.sh
+      buildah ${BUILDAH_ARGS} config --entrypoint '["/application.sh"]' ${CONTAINER}
+      buildah ${BUILDAH_ARGS} config --label APP_LABEL="Hello This Is My Label" --author="Tekton" ${CONTAINER}
+      buildah ${BUILDAH_ARGS} commit ${CONTAINER} ${DESTINATION_IMAGE}
+      buildah ${BUILDAH_ARGS} unmount ${CONTAINER}
+      buildah ${BUILDAH_ARGS} push ${DESTINATION_IMAGE} docker://${DESTINATION_IMAGE}
+    env:
+    - name: user.home
+      value: /workspace
+    workingDir: "/workspace"
+  - name: create-pod
+    image: image-registry.openshift-image-registry.svc:5000/openshift/cli
+    imagePullPolicy: IfNotPresent
+    script: |
+      cat << EOF | oc apply -f -
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: $(params.app-name)-pod
+      spec:
+        restartPolicy: Never
+        containers:
+        - name: $(params.app-name)-container
+          image: image-registry.openshift-image-registry.svc:5000/$(context.taskRun.namespace)/$(params.app-name):latest
+      EOF
+  volumes:
+  - name: varlibc
+    emptyDir: {}

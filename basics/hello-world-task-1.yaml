@@ -1,0 +1,17 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: hello-world-task-1
+spec:
+  params:
+  - name: greeting
+    type: string
+    default: "world"
+    description: Greeting Name
+  steps:
+  - name: build-image
+    image: quay.io/buildah/stable:latest
+    imagePullPolicy: IfNotPresent
+    script: |
+      #!/bin/bash
+      echo "Hello $(params.greeting)"

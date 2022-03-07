@@ -1,0 +1,82 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: create-trigger
+spec:
+  stepTemplate:
+    volumeMounts:
+    - name: trigger-template
+      mountPath: /workspace/templates
+    - name: trusted-ca
+      mountPath: /etc/pki/ca-trust/extracted/pem
+      readOnly: true
+  params:
+  - name: git-repo-url
+    type: string
+    description: "Git Repository URL"
+  - name: git-branch
+    type: string
+    description: "Git Branch to monitor"
+    default: "main"
+  - name: build-type
+    type: string
+    description: "Selected build type: quarkus-jvm, quarkus-fast-jar, quarkus-native, spring-boot"
+    default: "quarkus-fast-jar"
+  - name: deploy-type
+    type: string
+    description: "Pipeline to run: rolling-replace, blue-green, simple"
+    default: "rolling-replace"
+  volumes:
+  - name: trigger-template
+    configMap:
+      name: trigger-template
+  - name: trusted-ca
+    configMap:
+      name: trusted-ca
+      items:
+        - key: ca-bundle.crt 
+          path: tls-ca-bundle.pem
+  steps:
+  - name: create-trigger-objects
+    image: image-registry.openshift-image-registry.svc:5000/openshift/origin-cli:latest
+    imagePullPolicy: IfNotPresent
+    workingDir: /workspace
+    script: |
+      #!/bin/bash
+      echo -----------------------------------
+      echo "Creating Application Resources"
+      APP_NAME=$(basename $(params.git-repo-url) | cut -d'.' -f1 | tr "[:upper:]" "[:lower:]")
+      oc process --local -f /workspace/templates/gitea-trigger-template.yaml -p APP_NAME=${APP_NAME} -p GIT_REPOSITORY=$(params.git-repo-url) -p GIT_BRANCH=$(params.git-branch) -p BUILD_TYPE=$(params.build-type) -p DEPLOY_TYPE=$(params.deploy-type) | oc apply -f -
+      oc process --local -f /workspace/templates/gitea-trigger-binding.yaml -p APP_NAME=${APP_NAME} | oc apply -f -
+      echo -----------------------------------
+      echo "Creating Route for Event Listener"
+      SVC_NAME=$(oc get el ${APP_NAME}-listener -o=jsonpath='{.status.configuration.generatedName}')
+      oc create route edge ${SVC_NAME} --service=${SVC_NAME}
+      HOOK_URL="https://$(oc get route ${SVC_NAME} -o=jsonpath='{.spec.host}')"
+      SECRET=$(echo $RANDOM | md5sum | cut -d" " -f1)
+      oc create secret generic ${APP_NAME}-githook-secret --from-literal=GIT_HOOK_SECRET=${SECRET}
+      oc patch sa pipeline --type json --patch "[{\"op\": \"add\", \"path\": \"/secrets/-\", \"value\": {\"name\":\"${APP_NAME}-githook-secret\"}}]" -n app-demo
+      echo "export APP_NAME=${APP_NAME}" >> /workspace/env-vars
+      echo "export HOOK_URL=${HOOK_URL}" >> /workspace/env-vars
+      echo "export SECRET=${SECRET}" >> /workspace/env-vars
+      echo -----------------------------------
+  - name: create-webhook
+    image: image-registry.openshift-image-registry.svc:5000/openshift/java-11-builder:latest
+    imagePullPolicy: IfNotPresent
+    env:
+    - name: user.home
+      value: /tekton/home
+    workingDir: "/workspace"
+    script: |
+      #!/bin/bash
+      echo -----------------------------------
+      echo "Creating Webhook"
+      . /workspace/env-vars
+
+      PROJECT_PATH=$(echo $(params.git-repo-url) | cut -d"/" -f4- | cut -d"." -f1)
+      GIT_URL=$(echo $(params.git-repo-url) | cut -d"/" -f-3) 
+      GIT_CREDS="$(cat /tekton/creds-secrets/gitea-secret/username):$(cat /tekton/creds-secrets/gitea-secret/password)"
+      API_PATH="/api/v1/repos/${PROJECT_PATH}/hooks"
+      API_URL="${GIT_URL}${API_PATH}"
+      curl --location --request POST ${API_URL} -u ${GIT_CREDS} --header 'Content-Type: application/json' --data-raw "{\"active\":true,\"branch_filter\":\"$(params.git-branch)\",\"config\":{\"content_type\":\"json\",\"url\":\"${HOOK_URL}\",\"http_method\": \"post\",\"secret\":\"${SECRET}\"},\"events\": [\"push\"],\"type\": \"gitea\"}"
+      echo -----------------------------------

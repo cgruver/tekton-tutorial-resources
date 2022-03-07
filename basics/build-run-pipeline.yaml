@@ -1,0 +1,31 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: build-container-run-pod
+spec:
+  params:
+  - name: app-name
+    type: string
+    description: The application name
+  - name: run-it
+    type: string
+    description: Should I run the new container image?
+  tasks:
+  - name: build
+    taskRef:
+      name: build-image
+    params:
+    - name: app-name
+      value: $(params.app-name)
+  - name: run
+    taskRef:
+      name: create-pod
+    runAfter:
+    - build
+    when:
+    - input: "$(params.run-it)"
+      operator: in
+      values: ["yes-please"]
+    params:
+    - name: app-name
+      value: $(params.app-name)

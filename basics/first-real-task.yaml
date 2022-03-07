@@ -1,0 +1,55 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: buildah-demo-task
+spec:
+  params:
+  - name: app-name
+    type: string
+    description: The application name
+  stepTemplate:
+    volumeMounts:
+    - name: varlibc
+      mountPath: /var/lib/containers
+  steps:
+  - name: build-image
+    image: quay.io/buildah/stable:latest
+    securityContext:
+      runAsUser: 1000
+    imagePullPolicy: IfNotPresent
+    script: |
+      #!/bin/bash
+      export BUILDAH_ISOLATION=chroot
+      DESTINATION_IMAGE="image-registry.openshift-image-registry.svc:5000/$(context.taskRun.namespace)/$(params.app-name):latest"
+      echo "**** Set arguments for buildah"
+      BUILDAH_ARGS="--storage-driver vfs"
+      echo "**** Create a new container from the ubi-minimal 8.5 image"
+      CONTAINER=$( buildah ${BUILDAH_ARGS} from registry.access.redhat.com/ubi8/ubi-minimal:8.5 )
+      echo "**** Create a simple application for the new container to run"
+      cat << EOF > ./test.sh
+      #!/bin/bash
+      echo "---- hello there! ----"
+      sleep 5
+      echo "---- goodbye for now. ----"
+      exit 0
+      EOF
+      chmod 750 ./test.sh
+      echo "**** Copy the simple application to the new container"
+      buildah ${BUILDAH_ARGS} copy ${CONTAINER} ./test.sh /application.sh
+      echo "**** Set the entry point for the new container"
+      buildah ${BUILDAH_ARGS} config --entrypoint '["/application.sh"]' ${CONTAINER}
+      echo "**** Add a label to the new container"
+      buildah ${BUILDAH_ARGS} config --label APP_LABEL="Hello This Is My Label" --author="Tekton" ${CONTAINER}
+      echo "**** Save the new container image"
+      buildah ${BUILDAH_ARGS} commit ${CONTAINER} ${DESTINATION_IMAGE}
+      echo "**** Disconnect from the new container image"
+      buildah ${BUILDAH_ARGS} unmount ${CONTAINER}
+      echo "**** Push the new container image to the cluster image registry"
+      buildah ${BUILDAH_ARGS} push ${DESTINATION_IMAGE} docker://${DESTINATION_IMAGE}
+    env:
+    - name: user.home
+      value: /workspace
+    workingDir: "/workspace"
+  volumes:
+  - name: varlibc
+    emptyDir: {}

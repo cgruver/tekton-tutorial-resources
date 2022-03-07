@@ -1,0 +1,60 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: my-app-trigger-template
+  annotations:
+    triggers.tekton.dev/old-escape-quotes: 'true'
+spec:
+  params:
+    - name: app-name
+      description: The application name
+      default: my-app
+    - name: run-it
+      description: Should I run the new container image?
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1beta1
+      kind: PipelineRun
+      metadata:
+        generateName: my-app-pipeline-run-
+        labels:
+          app-name: my-app
+      spec:
+        serviceAccountName: pipeline
+        pipelineRef: 
+          name: build-container-run-pod
+        params:
+        - name: app-name
+          value: $(tt.params.app-name)
+        - name: run-it
+          value: $(tt.params.run-it)
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: my-app-trigger-binding
+spec:
+  params:
+    - name: app-name
+      value: "$(body.name)"
+    - name: run-it
+      value: "$(body.run-it)"
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: Trigger
+metadata:
+  name: my-app-trigger
+spec:
+  interceptors: []
+  bindings:
+  - ref: my-app-trigger-binding
+  template:
+    ref: my-app-trigger-template
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: my-app-trigger-listener
+spec:
+  serviceAccountName: pipeline
+  triggers:
+  - triggerRef: my-app-trigger

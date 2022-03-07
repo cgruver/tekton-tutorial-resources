@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea-http
+  labels:
+    app: gitea-demo
+spec:
+  clusterIP:
+  ports:
+  - name: gitea-http
+    port: 3000
+    protocol: TCP
+  selector:
+    app: gitea-demo
+  type: LoadBalancer
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: gitea-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  selector:
+    matchLabels:
+      volume: pv0002
+  resources:
+    requests:
+      storage: 100Gi
+  volumeName: pv0002
+  volumeMode: Filesystem
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    description: gitea-demo Deployment.
+  labels:
+    app: gitea-demo
+  name: gitea-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "gitea-demo"
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: "gitea-demo"
+      name: gitea-demo
+    spec:
+      securityContext:
+        runAsUser: 65536
+      serviceAccount: pipeline
+      terminationGracePeriodSeconds: 60
+      containers:
+      - image: quay.io/cgruver0/gitea-demo:latest
+        imagePullPolicy: Always
+        name: gitea-demo
+        ports:
+        - containerPort: 3000
+          name: gitea-http
+          protocol: TCP
+        - containerPort: 2222
+          name: gitea-ssh
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /usr/local/gitea
+          name: gitea-storage
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /
+            port: 3000
+            scheme: HTTP
+          periodSeconds: 20
+          successThreshold: 1
+          timeoutSeconds: 1
+        livenessProbe:
+          failureThreshold: 10
+          httpGet:
+            path: /
+            port: 3000
+            scheme: HTTP
+          periodSeconds: 20
+          successThreshold: 1
+          timeoutSeconds: 1
+      volumes:
+      - name: gitea-storage
+        persistentVolumeClaim:
+          claimName: gitea-pvc
