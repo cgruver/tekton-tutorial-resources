@@ -9,7 +9,7 @@ spec:
     default: "world"
     description: Greeting Name
   steps:
-  - name: build-image
+  - name: hello
     image: quay.io/buildah/stable:latest
     imagePullPolicy: IfNotPresent
     script: |
