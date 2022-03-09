@@ -4,6 +4,7 @@ if [[ ! -f /usr/local/gitea/installed ]]
 then
   for i in bin etc custom data db git
   do
+    rm -rf /usr/local/gitea/${i}
     mkdir /usr/local/gitea/${i}
   done
   
