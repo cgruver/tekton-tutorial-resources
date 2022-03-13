@@ -32,6 +32,14 @@ spec:
   volumeName: pv0002
   volumeMode: Filesystem
 ---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: trusted-ca
+  namespace: gitea
+  labels:
+    config.openshift.io/inject-trusted-cabundle: 'true'
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -72,6 +80,9 @@ spec:
         volumeMounts:
         - mountPath: /usr/local/gitea
           name: gitea-storage
+        - name: trusted-ca
+          mountPath: /etc/pki/ca-trust/extracted/pem
+          readOnly: true
         readinessProbe:
           failureThreshold: 3
           httpGet:
@@ -94,3 +105,9 @@ spec:
       - name: gitea-storage
         persistentVolumeClaim:
           claimName: gitea-pvc
+      - name: trusted-ca
+        configMap:
+          name: trusted-ca
+          items:
+            - key: ca-bundle.crt 
+              path: tls-ca-bundle.pem

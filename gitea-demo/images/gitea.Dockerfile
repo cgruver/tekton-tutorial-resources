@@ -2,8 +2,8 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:8.5
 
 ARG GITEA_VER=1.16.2
 
-COPY gitea-config.sh /gitea/gitea-config.sh
-COPY app.ini /gitea/app.ini
+COPY ./gitea/gitea-config.sh /gitea/gitea-config.sh
+COPY ./gitea/app.ini /gitea/app.ini
 
 RUN microdnf --nodocs install sqlite bash openssl wget ca-certificates tar shadow-utils gettext git && \
     mkdir /usr/local/gitea && \

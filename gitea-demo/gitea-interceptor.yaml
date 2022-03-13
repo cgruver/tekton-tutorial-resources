@@ -16,7 +16,7 @@ spec:
       serviceAccountName: tekton-triggers-core-interceptors
       containers:
         - name: gitea-interceptor
-          image: "quay.io/cgruver0/gitea-interceptor:latest"
+          image: quay.io/cgruver0/gitea-interceptor:latest
           args: ["-logtostderr", "-stderrthreshold", "INFO"]
           resources:
             requests:

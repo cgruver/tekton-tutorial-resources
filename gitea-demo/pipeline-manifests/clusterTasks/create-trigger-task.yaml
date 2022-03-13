@@ -1,12 +1,10 @@
 apiVersion: tekton.dev/v1beta1
-kind: Task
+kind: ClusterTask
 metadata:
   name: create-trigger
 spec:
   stepTemplate:
     volumeMounts:
-    - name: trigger-template
-      mountPath: /workspace/templates
     - name: trusted-ca
       mountPath: /etc/pki/ca-trust/extracted/pem
       readOnly: true
@@ -27,9 +25,6 @@ spec:
     description: "Pipeline to run: rolling-replace, blue-green, simple"
     default: "rolling-replace"
   volumes:
-  - name: trigger-template
-    configMap:
-      name: trigger-template
   - name: trusted-ca
     configMap:
       name: trusted-ca
@@ -38,7 +33,7 @@ spec:
           path: tls-ca-bundle.pem
   steps:
   - name: create-trigger-objects
-    image: image-registry.openshift-image-registry.svc:5000/openshift/origin-cli:latest
+    image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
     imagePullPolicy: IfNotPresent
     workingDir: /workspace
     script: |
@@ -46,8 +41,7 @@ spec:
       echo -----------------------------------
       echo "Creating Application Resources"
       APP_NAME=$(basename $(params.git-repo-url) | cut -d'.' -f1 | tr "[:upper:]" "[:lower:]")
-      oc process --local -f /workspace/templates/gitea-trigger-template.yaml -p APP_NAME=${APP_NAME} -p GIT_REPOSITORY=$(params.git-repo-url) -p GIT_BRANCH=$(params.git-branch) -p BUILD_TYPE=$(params.build-type) -p DEPLOY_TYPE=$(params.deploy-type) | oc apply -f -
-      oc process --local -f /workspace/templates/gitea-trigger-binding.yaml -p APP_NAME=${APP_NAME} | oc apply -f -
+      oc process openshift//gitea-tekton-trigger -p APP_NAME=${APP_NAME} -p GIT_REPOSITORY=$(params.git-repo-url) -p GIT_BRANCH=$(params.git-branch) -p BUILD_TYPE=$(params.build-type) -p DEPLOY_TYPE=$(params.deploy-type) | oc apply -f -
       echo -----------------------------------
       echo "Creating Route for Event Listener"
       SVC_NAME=$(oc get el ${APP_NAME}-listener -o=jsonpath='{.status.configuration.generatedName}')
@@ -61,7 +55,7 @@ spec:
       echo "export SECRET=${SECRET}" >> /workspace/env-vars
       echo -----------------------------------
   - name: create-webhook
-    image: image-registry.openshift-image-registry.svc:5000/openshift/java-11-builder:latest
+    image: quay.io/cgruver0/java-11-builder:latest
     imagePullPolicy: IfNotPresent
     env:
     - name: user.home

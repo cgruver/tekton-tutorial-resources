@@ -1,5 +1,5 @@
 apiVersion: tekton.dev/v1beta1
-kind: Task
+kind: ClusterTask
 metadata:
   name: build-java
 spec:
@@ -7,8 +7,6 @@ spec:
     volumeMounts:
     - name: varlibc
       mountPath: /var/lib/containers
-    - name: maven-settings
-      mountPath: /tmp/maven-settings
     - name: trusted-ca
       mountPath: /etc/pki/ca-trust/extracted/pem
       readOnly: true
@@ -32,9 +30,6 @@ spec:
   volumes:
   - name: varlibc
     emptyDir: {}
-  - name: maven-settings
-    configMap:
-      name: maven-settings-xml
   - name: trusted-ca
     configMap:
       name: trusted-ca
@@ -43,7 +38,7 @@ spec:
           path: tls-ca-bundle.pem
   steps:
   - name: prep-build
-    image: image-registry.openshift-image-registry.svc:5000/openshift/java-11-builder:latest
+    image: quay.io/cgruver0/java-11-builder:latest
     imagePullPolicy: IfNotPresent
     script: |
       #!/bin/bash
@@ -63,17 +58,16 @@ spec:
           echo "$(git rev-parse HEAD)" > /workspace/git-sha.out
         ;;
       esac
-      cp /tmp/maven-settings/settings.xml /workspace/source
     env:
     - name: user.home
       value: /tekton/home
     workingDir: "/"
   - name: build-sources
-    image: image-registry.openshift-image-registry.svc:5000/openshift/java-11-builder:latest
+    image: quay.io/cgruver0/java-11-builder:latest
     imagePullPolicy: IfNotPresent
     script: |
       #!/bin/bash
-      MVN_ARGS="-DskipTests -Dmaven.wagon.http.ssl.insecure=true -s./settings.xml -DappName=app"
+      MVN_ARGS="-DskipTests -DappName=app"
       case $(params.build-type) in
         spring-boot)
         ;;
@@ -92,7 +86,7 @@ spec:
       value: /tekton/home
     workingDir: "/workspace/source"
   - name: prep-workingdir-for-buildah
-    image: image-registry.openshift-image-registry.svc:5000/openshift/buildah:latest
+    image: quay.io/buildah/stable:latest
     imagePullPolicy: IfNotPresent
     script: |
       chmod 777 /workspace/source
@@ -102,7 +96,7 @@ spec:
       value: /tekton/home
     workingDir: "/workspace/source"
   - name: build-image
-    image: image-registry.openshift-image-registry.svc:5000/openshift/buildah:latest
+    image: quay.io/buildah/stable:latest
     securityContext:
       runAsUser: 1000
     imagePullPolicy: IfNotPresent
@@ -114,9 +108,9 @@ spec:
       DESTINATION_IMAGE="image-registry.openshift-image-registry.svc:5000/$(context.taskRun.namespace)/$(params.app-name)"
       if [[ $(params.build-type) == "quarkus-native" ]]
       then
-        CONTAINER=$(buildah ${BUILDAH_ARGS} from image-registry.openshift-image-registry.svc:5000/openshift/ubi-minimal:latest)
+        CONTAINER=$(buildah ${BUILDAH_ARGS} from registry.access.redhat.com/ubi8/ubi-minimal:8.5)
       else
-        CONTAINER=$(buildah ${BUILDAH_ARGS} from image-registry.openshift-image-registry.svc:5000/openshift/java-11-app-runner:latest )
+        CONTAINER=$(buildah ${BUILDAH_ARGS} from quay.io/cgruver0/java-11-app-runner:latest )
       fi
       case $(params.build-type) in
         spring-boot)

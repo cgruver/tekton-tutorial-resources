@@ -9,14 +9,16 @@ metadata:
     tags: "java,quarkus"
     version: "1.0"
   name: create-rolling-replace-quarkus-fast-jar-app
+  namespace: openshift
 objects:
   - apiVersion: tekton.dev/v1beta1
     kind: TaskRun
     metadata:
-      name: create-trigger-${RANDOM_TASK}
+      generateName: create-trigger-
     spec:
       taskRef:
         name: create-trigger
+        kind: ClusterTask
       params:
       - name: git-repo-url
         value: ${GIT_REPOSITORY}
@@ -38,9 +40,3 @@ parameters:
   name: GIT_BRANCH
   required: true
   value: "main"
--
-  description: "auto-filled random task name"
-  displayName: "Auto-Filled (Leave this field blank)"
-  name: RANDOM_TASK
-  generate: expression
-  from: "[a-z0-9]{8}"
