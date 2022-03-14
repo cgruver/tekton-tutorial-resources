@@ -33,7 +33,7 @@ objects:
         new-deploy: ""
       name: ${DEPLOY_NAME}
     spec:
-      replicas: 1
+      replicas: 0
       selector:
         matchLabels:
           version: ${DEPLOY_NAME}

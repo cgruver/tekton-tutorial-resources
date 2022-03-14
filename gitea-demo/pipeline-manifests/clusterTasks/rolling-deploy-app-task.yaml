@@ -93,6 +93,11 @@ spec:
           sed -i "s|--DEPLOY_NAME--|${DEPLOY_NAME}|g" ./$(params.config-git-path)/patch/deployment-patch.yaml
           sed -i "s|--APP_NAME--|$(params.app-name)|g" ./$(params.config-git-path)/patch/deployment-patch.yaml
           oc patch deployment ${DEPLOY_NAME} --patch "$(cat ./$(params.config-git-path)/patch/deployment-patch.yaml)"
+        else
+          echo -----------------------------------
+          echo "Scaling deployment"
+          echo -----------------------------------
+          oc scale deployment ${DEPLOY_NAME} --replicas=1
         fi
         echo -----------------------------------
       }
