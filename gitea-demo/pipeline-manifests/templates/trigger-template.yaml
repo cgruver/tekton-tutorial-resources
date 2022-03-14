@@ -84,7 +84,7 @@ objects:
         - name: git-checkout-sha
           value: "$(body.after)"
         - name: git-repo-url
-          value: "$(body.repository.clone_url)"
+          value: ${GIT_REPOSITORY}.git
 parameters:
   -
     name: APP_NAME

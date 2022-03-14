@@ -40,6 +40,80 @@ metadata:
   labels:
     config.openshift.io/inject-trusted-cabundle: 'true'
 ---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: gitea-config
+data:
+  app-ini: |
+    RUN_USER = gitea
+    RUN_MODE = prod
+
+    [repository]
+    ROOT = /usr/local/gitea/git
+    SCRIPT_TYPE = sh
+    DEFAULT_BRANCH = main
+    DEFAULT_PUSH_CREATE_PRIVATE = true
+    ENABLE_PUSH_CREATE_USER = true
+    ENABLE_PUSH_CREATE_ORG = true
+
+    [server]
+    HTTP_PORT = 3000
+    STATIC_ROOT_PATH = /usr/local/gitea/web
+    APP_DATA_PATH    = /usr/local/gitea/data
+    LFS_START_SERVER = true
+
+    [service]
+    DISABLE_REGISTRATION = true
+
+    [database]
+    DB_TYPE = sqlite3
+    PATH = /usr/local/gitea/db/gitea.db
+
+    [security]
+    INSTALL_LOCK = true
+    SECRET_KEY = ${SECRET_KEY}
+    INTERNAL_TOKEN = ${INTERNAL_TOKEN}
+
+    [oauth2]
+    JWT_SECRET = ${JWT_SECRET}
+
+    [session]
+    PROVIDER = file
+
+    [log]
+    ROOT_PATH = /usr/local/gitea/log
+    MODE = file
+    LEVEL = Info
+
+    [webhook]
+    ALLOWED_HOST_LIST = *
+  gitea-config-sh: |
+    function configGitea() {
+      if [[ ! -f /usr/local/gitea/installed ]]
+      then
+        for i in bin etc custom data db git
+        do
+          rm -rf /usr/local/gitea/${i}
+          mkdir /usr/local/gitea/${i}
+        done
+        
+        echo "export INTERNAL_TOKEN=$(gitea generate secret INTERNAL_TOKEN)" > /usr/local/gitea/set_tokens.sh
+        echo "export SECRET_KEY=$(gitea generate secret SECRET_KEY)" >> /usr/local/gitea/set_tokens.sh
+        echo "export JWT_SECRET=$(gitea generate secret JWT_SECRET)" >> /usr/local/gitea/set_tokens.sh
+        . /usr/local/gitea/set_tokens.sh
+        envsubst < /gitea/app.ini > /usr/local/gitea/etc/app.ini
+
+        gitea --config /usr/local/gitea/etc/app.ini migrate
+        gitea --config /usr/local/gitea/etc/app.ini admin user create --admin --username gitea --password password --email gitea@gitea.crc.testing --must-change-password
+        gitea --config /usr/local/gitea/etc/app.ini admin user create --username devuser --password password --email devuser@gitea.crc.testing --must-change-password
+        touch /usr/local/gitea/installed
+      else
+        . /usr/local/gitea/set_tokens.sh
+        envsubst < /gitea/app.ini > /usr/local/gitea/etc/app.ini
+      fi
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -80,8 +154,10 @@ spec:
         volumeMounts:
         - mountPath: /usr/local/gitea
           name: gitea-storage
-        - name: trusted-ca
-          mountPath: /etc/pki/ca-trust/extracted/pem
+        - mountPath: /gitea
+          name: gitea-config
+        - mountPath: /etc/pki/ca-trust/extracted/pem
+          name: trusted-ca
           readOnly: true
         readinessProbe:
           failureThreshold: 3
@@ -105,6 +181,14 @@ spec:
       - name: gitea-storage
         persistentVolumeClaim:
           claimName: gitea-pvc
+      - name: gitea-config
+        configMap:
+          name: gitea-config
+          items:
+          - key: app-ini
+            path: app.ini
+          - key: gitea-config-sh
+            path: gitea-config.sh
       - name: trusted-ca
         configMap:
           name: trusted-ca
