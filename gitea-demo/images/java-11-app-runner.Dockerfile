@@ -15,5 +15,5 @@ RUN microdnf install openssl curl ca-certificates ${JAVA_PACKAGE} \
     && echo "securerandom.source=file:/dev/urandom" >> /etc/alternatives/jre/lib/security/java.security
 
 EXPOSE 8080
-USER 1001
+USER 65536
 ENTRYPOINT [ "/deployments/run-java.sh" ]
