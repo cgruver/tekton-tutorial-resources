@@ -32,6 +32,9 @@ spec:
   - name: create-namespace
     image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
     imagePullPolicy: IfNotPresent
+    env:
+    - name: HOME
+      value: /workspace
     workingDir: /workspace
     script: |
       #!/bin/bash
@@ -47,4 +50,4 @@ spec:
       # Create namespace
       oc new-project ${PROJECT_NAME}
       # Grant the user admin to the new namespace
-      oc adm add-role-to-user admin $(params.username) -n ${PROJECT_NAME}
+      oc adm policy add-role-to-user admin $(params.username) -n ${PROJECT_NAME}
