@@ -1,0 +1,50 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: create-namespace
+spec:
+  stepTemplate:
+    volumeMounts:
+    - name: trusted-ca
+      mountPath: /etc/pki/ca-trust/extracted/pem
+      readOnly: true
+  params:
+  - name: repo
+    type: string
+    description: "Git Repository name"
+  - name: branch
+    type: string
+    description: "Git Repository Branch"
+  - name: hook-type
+    type: string
+    description: "Create Webhook Type: tag or branch"
+  - name: username
+    type: string
+    description: "Git user that created the branch"
+  volumes:
+  - name: trusted-ca
+    configMap:
+      name: trusted-ca
+      items:
+        - key: ca-bundle.crt 
+          path: tls-ca-bundle.pem
+  steps:
+  - name: create-namespace
+    image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+    imagePullPolicy: IfNotPresent
+    workingDir: /workspace
+    script: |
+      #!/bin/bash
+      if [[ $(params.hook-type) == "tag" ]]
+      then
+        echo "Not creating Namespaces for Tags"
+        exit 0
+      fi
+      # Translate to lowercase
+      PROJECT_NAME=$(echo "$(params.repo)-$(params.branch)" | tr "[:upper:]" "[:lower:]")
+      # Translate "_" into "-"
+      PROJECT_NAME=${PROJECT_NAME//_/-}
+      # Create namespace
+      oc new-project ${PROJECT_NAME}
+      # Grant the user admin to the new namespace
+      oc adm add-role-to-user admin $(params.username) -n ${PROJECT_NAME}

@@ -1,6 +1,6 @@
 FROM registry.access.redhat.com/ubi8/ubi-minimal:8.5
 
-ARG GITEA_VER=1.16.2
+ARG GITEA_VER=1.16.7
 
 COPY gitea/entrypoint.sh /entrypoint.sh
 

@@ -106,7 +106,7 @@ data:
 
         gitea --config /usr/local/gitea/etc/app.ini migrate
         gitea --config /usr/local/gitea/etc/app.ini admin user create --admin --username gitea --password password --email gitea@gitea.crc.testing --must-change-password
-        gitea --config /usr/local/gitea/etc/app.ini admin user create --username devuser --password password --email devuser@gitea.crc.testing --must-change-password
+        gitea --config /usr/local/gitea/etc/app.ini admin user create --username developer --password password --email developer@gitea.crc.testing --must-change-password
         touch /usr/local/gitea/installed
       else
         . /usr/local/gitea/set_tokens.sh

@@ -1,0 +1,71 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: ns-prov-trigger-template
+  annotations:
+    triggers.tekton.dev/old-escape-quotes: 'true'
+spec:
+  params:
+    - name: repo
+      description: The Git repo name
+    - name: branch
+      description: The Git repo branch name
+    - name: hook-type
+      description: The Webhook type - branch or tag
+    - name: username
+      description: The user that created the branch
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1beta1
+      kind: TaskRun
+      metadata:
+        generateName: ns-prov-task-run-
+        labels:
+          app-name: ns-prov
+      spec:
+        serviceAccountName: provisioner
+        taskRef: 
+          name: create-namespace
+        params:
+        - name: repo
+          value: $(tt.params.repo)
+        - name: branch
+          value: $(tt.params.branch)
+        - name: hook-type
+          value: $(tt.params.hook-type)
+        - name: username
+          value: $(tt.params.username)
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: ns-prov-trigger-binding
+spec:
+  params:
+    - name: repo
+      value: "$(body.repository.name)"
+    - name: branch
+      value: "$(body.ref)"
+    - name: hook-type
+      value: "$(body.ref_type)"
+    - name: username
+      value: "$(body.sender.username)"
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: Trigger
+metadata:
+  name: ns-prov-trigger
+spec:
+  interceptors: []
+  bindings:
+  - ref: ns-prov-trigger-binding
+  template:
+    ref: ns-prov-trigger-template
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: ns-prov-trigger-listener
+spec:
+  serviceAccountName: pipeline
+  triggers:
+  - triggerRef: ns-prov-trigger
