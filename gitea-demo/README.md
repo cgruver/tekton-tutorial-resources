@@ -4,8 +4,10 @@
 
 ## Build Demo Images
 
+```bash
 export REGISTRY=quay.io/cgruver0
 podman login ${REGISTRY}
+```
 
 ### Gitea Image for demos in CRC
 
